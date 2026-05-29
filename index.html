@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escáner DNI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0a; color: #efefef;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh; padding: 20px 16px 60px;
+      max-width: 520px; margin: 0 auto;
+    }
+    header { border-bottom: 1px solid #252525; padding-bottom: 14px; margin-bottom: 24px; }
+    header h1 { font-size: 1.05rem; color: #00e5a0; letter-spacing: 0.05em; }
+    header p  { font-size: 0.7rem; color: #555; margin-top: 3px; }
+
+    #api-section { margin-bottom: 20px; }
+    #api-section label { display: block; font-size: 0.65rem; color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+    #api-key { width: 100%; padding: 10px 12px; background: #141414; border: 1px solid #252525; border-radius: 8px; color: #efefef; font-family: 'Courier New', monospace; font-size: 0.8rem; }
+    #api-key:focus { outline: none; border-color: #00e5a0; }
+    #api-hint { font-size: 0.65rem; color: #555; margin-top: 5px; }
+    #api-hint a { color: #00e5a0; }
+
+    #upload-zone { border: 1.5px dashed #252525; border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; background: #141414; position: relative; transition: border-color 0.2s, background 0.2s; }
+    #upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    #upload-zone .icon { font-size: 2.2rem; margin-bottom: 10px; }
+    #upload-zone strong { display: block; font-size: 0.95rem; margin-bottom: 4px; }
+    #upload-zone span { font-size: 0.8rem; color: #555; }
+
+    #preview-wrap { display: none; margin-top: 14px; position: relative; border-radius: 10px; overflow: hidden; border: 1px solid #252525; }
+    #preview-img { display: block; width: 100%; height: auto; border-radius: 10px; }
+    #change-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.75); border: 1px solid #333; color: #efefef; font-size: 0.7rem; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: 'Courier New', monospace; }
+
+    #scan-btn { display: block; width: 100%; margin-top: 14px; padding: 13px; background: #00e5a0; color: #000; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 700; cursor: pointer; letter-spacing: 0.04em; font-family: 'Courier New', monospace; }
+    #scan-btn:disabled { background: #252525; color: #555; cursor: not-allowed; }
+
+    #status-bar { display: none; align-items: center; gap: 10px; margin-top: 14px; padding: 11px 14px; background: #141414; border: 1px solid #252525; border-radius: 8px; font-size: 0.78rem; color: #555; }
+    .spinner { width: 15px; height: 15px; flex-shrink: 0; border: 2px solid #252525; border-top-color: #00e5a0; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #error-box { display: none; margin-top: 12px; padding: 11px 14px; background: #1a0810; border: 1px solid #4a1020; border-radius: 8px; font-size: 0.78rem; color: #ff4d6d; }
+
+    #result-card { display: none; margin-top: 18px; background: #141414; border: 1px solid #003d2b; border-radius: 12px; padding: 16px; }
+    #result-card .label { font-size: 0.6rem; color: #00e5a0; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px; }
+    .result-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #252525; }
+    .result-row:last-child { border-bottom: none; }
+    .result-row .key { font-size: 0.7rem; color: #555; }
+    .result-row .val { font-size: 1rem; font-weight: 700; }
+    .result-row .val.ok  { color: #efefef; }
+    .result-row .val.err { color: #ff4d6d; font-size: 0.8rem; }
+
+    #list-section { display: none; margin-top: 28px; }
+    .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .list-header h2 { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: #555; }
+    #count { background: #003d2b; color: #00e5a0; font-size: 0.7rem; padding: 2px 9px; border-radius: 20px; }
+    #list-box { background: #141414; border: 1px solid #252525; border-radius: 10px; overflow: hidden; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-bottom: 1px solid #252525; }
+    .list-item:last-child { border-bottom: none; }
+    .list-item .nombre { font-size: 0.9rem; font-weight: 600; }
+    .list-item .dni    { font-size: 0.75rem; color: #00e5a0; margin-top: 2px; }
+    .list-item .del    { background: none; border: none; color: #555; cursor: pointer; font-size: 0.9rem; padding: 0 4px; }
+
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+    .actions button { flex: 1; padding: 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; background: #141414; font-family: 'Courier New', monospace; }
+    #copy-btn { border: 1px solid #252525; color: #efefef; }
+    #clear-btn { border: 1px solid #3a1020; color: #ff4d6d; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>// ESCÁNER DNI</h1>
+  <p>powered by OCR.space</p>
+</header>
+
+<div id="api-section">
+  <label>Tu API Key de OCR.space</label>
+  <input type="password" id="api-key" placeholder="helloworld" autocomplete="off">
+  <p id="api-hint">Obtenela gratis en <a href="https://ocr.space/ocrapi" target="_blank">ocr.space/ocrapi</a></p>
+</div>
+
+<div id="upload-zone">
+  <input type="file" id="file-input" accept="image/*" capture="environment">
+  <div class="icon">📄</div>
+  <strong>Subí una foto del documento</strong>
+  <span>Tocá para abrir la cámara o elegir imagen</span>
+</div>
+
+<div id="preview-wrap">
+  <img id="preview-img" src="" alt="preview">
+  <button id="change-btn">cambiar</button>
+</div>
+
+<button id="scan-btn" disabled>Escanear documento</button>
+<div id="status-bar"><div class="spinner"></div><span>Escaneando...</span></div>
+<div id="error-box"></div>
+
+<div id="result-card">
+  <div class="label">▸ Último escaneo</div>
+  <div class="result-row"><span class="key">NOMBRE</span><span class="val" id="res-nombre">—</span></div>
+  <div class="result-row"><span class="key">DNI</span><span class="val" id="res-dni">—</span></div>
+</div>
+
+<div id="list-section">
+  <div class="list-header">
+    <h2>Lista acumulada</h2>
+    <span id="count">0</span>
+  </div>
+  <div id="list-box"></div>
+  <div class="actions">
+    <button id="copy-btn">📋 Copiar todo</button>
+    <button id="clear-btn">🗑 Limpiar</button>
+  </div>
+</div>
+
+<script>
+  var lista = [];
+  var currentFile = null;
+
+  var fileInput   = document.getElementById('file-input');
+  var uploadZone  = document.getElementById('upload-zone');
+  var previewWrap = document.getElementById('preview-wrap');
+  var previewImg  = document.getElementById('preview-img');
+  var changeBtn   = document.getElementById('change-btn');
+  var scanBtn     = document.getElementById('scan-btn');
+  var statusBar   = document.getElementById('status-bar');
+  var errorBox    = document.getElementById('error-box');
+  var resultCard  = document.getElementById('result-card');
+  var resNombre   = document.getElementById('res-nombre');
+  var resDni      = document.getElementById('res-dni');
+  var listSection = document.getElementById('list-section');
+  var listBox     = document.getElementById('list-box');
+  var countEl     = document.getElementById('count');
+  var copyBtn     = document.getElementById('copy-btn');
+  var clearBtn    = document.getElementById('clear-btn');
+  var apiKeyInput = document.getElementById('api-key');
+
+  var DEFAULT_KEY = 'K87734218088957';
+  var savedKey = localStorage.getItem('ocr_api_key') || DEFAULT_KEY;
+  apiKeyInput.value = savedKey;
+
+  apiKeyInput.addEventListener('input', function() {
+    localStorage.setItem('ocr_api_key', apiKeyInput.value.trim());
+  });
+
+  fileInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    currentFile = file;
+    previewImg.src = URL.createObjectURL(file);
+    previewWrap.style.display = 'block';
+    uploadZone.style.display = 'none';
+    scanBtn.disabled = false;
+    errorBox.style.display = 'none';
+  });
+
+  changeBtn.addEventListener('click', function() {
+    currentFile = null;
+    previewWrap.style.display = 'none';
+    uploadZone.style.display = 'block';
+    scanBtn.disabled = true;
+    fileInput.value = '';
+    resultCard.style.display = 'none';
+  });
+
+  scanBtn.addEventListener('click', function() {
+    var apiKey = apiKeyInput.value.trim();
+    if (!apiKey) { showError('Ingresá tu API Key primero.'); return; }
+    if (!currentFile) return;
+
+    setLoading(true);
+    errorBox.style.display = 'none';
+
+    // Leer como base64
+    var reader = new FileReader();
+    reader.onload = function() {
+      var base64Full = reader.result; // incluye "data:image/jpeg;base64,..."
+
+      fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'apikey=' + encodeURIComponent(apiKey) +
+              '&base64Image=' + encodeURIComponent(base64Full) +
+              '&language=spa' +
+              '&detectOrientation=true' +
+              '&scale=true' +
+              '&OCREngine=2' +
+              '&isOverlayRequired=false'
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.IsErroredOnProcessing) throw new Error(data.ErrorMessage[0] || 'Error OCR');
+
+        var texto = '';
+        if (data.ParsedResults && data.ParsedResults.length > 0) {
+          texto = data.ParsedResults[0].ParsedText || '';
+        }
+        if (!texto) throw new Error('No se detectó texto en la imagen.');
+
+        // ── Extraer DNI ──
+        var dni = null;
+        var dniMatch = texto.match(/\b\d{1,3}[\.\s]?\d{3}[\.\s]?\d{3}\b/);
+        if (dniMatch) dni = dniMatch[0].replace(/[\.\s]/g, '');
+
+        // ── Extraer Nombre ──
+        var nombre = null;
+        var lineas = texto.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+
+        // Buscar etiqueta "nombres", "apellido y nombre", "apellidos", etc.
+        for (var i = 0; i < lineas.length; i++) {
+          if (/nombres?\s*[:\-]/i.test(lineas[i])) {
+            var p = lineas[i].split(/nombres?\s*[:\-]\s*/i);
+            if (p[1] && p[1].trim().length > 1) { nombre = p[1].trim(); break; }
+            if (lineas[i+1]) { nombre = lineas[i+1].trim(); break; }
+          }
+          if (/apellido/i.test(lineas[i])) {
+            var p2 = lineas[i].split(/apellidos?\s*[:\-]?\s*/i);
+            if (p2[1] && p2[1].trim().length > 1) { nombre = p2[1].trim(); break; }
+            if (lineas[i+1]) { nombre = lineas[i+1].trim(); break; }
+          }
+        }
+
+        // Si no encontró con etiqueta, buscar línea larga en mayúsculas sin números
+        if (!nombre) {
+          for (var j = 0; j < lineas.length; j++) {
+            var l = lineas[j];
+            if (l.length > 5 && l === l.toUpperCase() && /^[A-ZÁÉÍÓÚÑÜ\s]+$/.test(l)) {
+              nombre = l; break;
+            }
+          }
+        }
+
+        if (nombre) nombre = nombre.replace(/\s+/g,' ').trim();
+
+        resNombre.textContent = nombre || 'No encontrado';
+        resNombre.className   = 'val ' + (nombre ? 'ok' : 'err');
+        resDni.textContent    = dni    || 'No encontrado';
+        resDni.className      = 'val ' + (dni    ? 'ok' : 'err');
+        resultCard.style.display = 'block';
+
+        if (nombre || dni) {
+          lista.push({ nombre: nombre || '—', dni: dni || '—' });
+          renderLista();
+          listSection.style.display = 'block';
+        }
+        setLoading(false);
+      })
+      .catch(function(err) {
+        showError(err.message || 'Error desconocido');
+        setLoading(false);
+      });
+    };
+    reader.onerror = function() { showError('No se pudo leer el archivo.'); setLoading(false); };
+    reader.readAsDataURL(currentFile);
+  });
+
+  function renderLista() {
+    listBox.innerHTML = '';
+    lista.forEach(function(item, i) {
+      var div = document.createElement('div');
+      div.className = 'list-item';
+      div.innerHTML =
+        '<div><div class="nombre">' + item.nombre + '</div><div class="dni">' + item.dni + '</div></div>' +
+        '<button class="del" data-i="' + i + '">✕</button>';
+      listBox.appendChild(div);
+    });
+    countEl.textContent = lista.length;
+    listBox.querySelectorAll('.del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        lista.splice(+btn.getAttribute('data-i'), 1);
+        renderLista();
+        if (lista.length === 0) listSection.style.display = 'none';
+      });
+    });
+  }
+
+  copyBtn.addEventListener('click', function() {
+    var text = lista.map(function(x){ return x.nombre + '\t' + x.dni; }).join('\n');
+    navigator.clipboard.writeText(text).then(function() {
+      copyBtn.textContent = '✓ Copiado';
+      setTimeout(function(){ copyBtn.textContent = '📋 Copiar todo'; }, 2000);
+    });
+  });
+
+  clearBtn.addEventListener('click', function() {
+    if (!confirm('¿Borrar los ' + lista.length + ' registros?')) return;
+    lista = [];
+    listSection.style.display = 'none';
+    resultCard.style.display = 'none';
+  });
+
+  function setLoading(on) {
+    scanBtn.disabled = on;
+    statusBar.style.display = on ? 'flex' : 'none';
+  }
+
+  function showError(msg) {
+    errorBox.textContent = '⚠ ' + msg;
+    errorBox.style.display = 'block';
+  }
+</script>
+</body>
+</html>
