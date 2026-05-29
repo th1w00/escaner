@@ -137,10 +137,12 @@
   var clearBtn    = document.getElementById('clear-btn');
   var apiKeyInput = document.getElementById('api-key');
 
-  var DEFAULT_KEY = 'K87734218088957';
+  // Reemplazá PONE_TU_KEY_ACA con tu key de OCR.space
+  var DEFAULT_KEY = 'PONE_TU_KEY_ACA';
   var savedKey = localStorage.getItem('ocr_api_key') || DEFAULT_KEY;
   apiKeyInput.value = savedKey;
 
+  // Guardar key si la cambia manualmente
   apiKeyInput.addEventListener('input', function() {
     localStorage.setItem('ocr_api_key', apiKeyInput.value.trim());
   });
@@ -173,11 +175,30 @@
     setLoading(true);
     errorBox.style.display = 'none';
 
-    // Leer como base64
+    // Comprimir imagen antes de mandar
     var reader = new FileReader();
     reader.onload = function() {
-      var base64Full = reader.result; // incluye "data:image/jpeg;base64,..."
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var MAX = 1200;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        var base64Full = canvas.toDataURL('image/jpeg', 0.7);
+        enviarOCR(base64Full);
+      };
+      img.src = reader.result;
+    };
+    reader.onerror = function() { showError('No se pudo leer el archivo.'); setLoading(false); };
+    reader.readAsDataURL(currentFile);
+  });
 
+  function enviarOCR(base64Full) {
       fetch('https://api.ocr.space/parse/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -251,10 +272,7 @@
         showError(err.message || 'Error desconocido');
         setLoading(false);
       });
-    };
-    reader.onerror = function() { showError('No se pudo leer el archivo.'); setLoading(false); };
-    reader.readAsDataURL(currentFile);
-  });
+  }
 
   function renderLista() {
     listBox.innerHTML = '';
