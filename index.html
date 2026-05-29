@@ -199,7 +199,10 @@
   });
 
   function enviarOCR(base64Full) {
-      fetch('https://api.ocr.space/parse/image', {
+      var controller = new AbortController();
+      var timeout = setTimeout(function() { controller.abort(); }, 15000);
+
+      fetch('https://api.ocr.space/parse/image', { signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'apikey=' + encodeURIComponent(apiKey) +
@@ -210,7 +213,7 @@
               '&OCREngine=2' +
               '&isOverlayRequired=false'
       })
-      .then(function(r) { return r.json(); })
+      .then(function(r) { clearTimeout(timeout); return r.json(); })
       .then(function(data) {
         if (data.IsErroredOnProcessing) throw new Error(data.ErrorMessage[0] || 'Error OCR');
 
@@ -269,7 +272,12 @@
         setLoading(false);
       })
       .catch(function(err) {
-        showError(err.message || 'Error desconocido');
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+          showError('Tiempo agotado. Verificá tu conexión o la API key.');
+        } else {
+          showError(err.message || 'Error desconocido');
+        }
         setLoading(false);
       });
   }
